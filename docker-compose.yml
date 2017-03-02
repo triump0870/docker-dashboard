@@ -1,0 +1,97 @@
+version: '2'
+services:
+  {{WEB_APPLICATION}}:
+    image: {{WEB_APPLICATION}}
+    container_name: {{WEB_APPLICATION}}
+    depends_on:
+      - {{MYSQL_SERVER}}
+    links:
+      - "{{MYSQL_SERVER}}:{{MYSQL_SERVER}}"
+    volumes:
+      - .:/app/
+    env_file: {{ENV_FILE}}
+    environment:
+      - "DATABASE_PASSWORD=${DATABASE_PASSWORD}"
+      - "DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}"
+
+  {{NGINX_SERVER}}:
+    image: {{NGINX_SERVER}}
+    container_name: {{NGINX_SERVER}}
+    depends_on:
+      - {{WEB_APPLICATION}}
+    links:
+      - "{{WEB_APPLICATION}}:{{WEB_APPLICATION}}"
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
+    environment:
+      - UWSGI_URI={{WEB_APPLICATION}}:30000
+      - "SERVER_NAME=${WEB_HOST}"
+      - "VIRTUAL_HOST=${WEB_HOST}"
+
+  {{MYSQL_SERVER}}:
+    image: {{MYSQL_SERVER}}
+    container_name: {{MYSQL_SERVER}}
+    ports:
+      - "3306:3306"
+    volumes_from:
+      - {{MYSQL_SERVER}}-data
+    depends_on:
+      - {{MYSQL_SERVER}}-data
+    environment:
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+
+  {{MYSQL_SERVER}}-data:
+    image: mysql:latest
+    container_name: {{MYSQL_SERVER}}-data
+    volumes:
+      - mysql-data:/var/lib/mysql/data
+    entrypoint: /bin/bash
+    privileged: true
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    links:
+      - "{{MYSQL_SERVER}}:mysql"
+    expose:
+      - "80"
+    environment:
+      - "MYSQL_USERNAME=${MYSQL_USERNAME}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+      - "PMA_HOST=${PMA_HOST}"
+      - "PMA_ABSOLUTE_URI=http://${DB_HOST}"
+      - "VIRTUAL_HOST=${DB_HOST}"
+
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes_from:
+      - {{NGINX_SERVER}}
+    links:
+      - {{NGINX_SERVER}}
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+      - ./templates/nginx:/etc/docker-gen/templates
+
+  {{NGINX_SERVER}}-www:
+    image: {{NGINX_SERVER}}
+    container_name: {{NGINX_SERVER}}2
+    depends_on:
+      - {{WEB_APPLICATION}}
+    links:
+      - "{{WEB_APPLICATION}}:{{WEB_APPLICATION}}"
+    volumes:
+      - ./static:/app/static
+      - ./media:/app/media
+    environment:
+      - UWSGI_URI={{WEB_APPLICATION}}:30000
+      - "SERVER_NAME=www.${WEB_HOST}"
+      - "VIRTUAL_HOST=www.${WEB_HOST}"
+
+volumes:
+  mysql-data:
+    external: true
+
